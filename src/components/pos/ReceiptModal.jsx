@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Printer, X } from 'lucide-react';
+import useStoreConfig from '../../hooks/useStoreConfig';
 
 const CODE39_PATTERNS = {
   '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn',
@@ -49,6 +50,7 @@ function BarcodeSvg({ value }) {
 }
 
 export default function ReceiptModal({ sale, onClose, onNewSale }) {
+  const store = useStoreConfig();
   const handlePrint = () => window.print();
 
   // Keyboard shortcut: Enter or P to print, Escape to close
@@ -133,15 +135,15 @@ export default function ReceiptModal({ sale, onClose, onNewSale }) {
           >
             {/* Pharmacy Header */}
             <div className="text-center pb-3 border-b border-dashed border-slate-400 space-y-1">
-              <h2 className="text-base font-black tracking-tight uppercase">Hafiz Pharmacy POS</h2>
+              <h2 className="text-base font-black tracking-tight uppercase">{store.appName}</h2>
               <p className="text-[10px] text-slate-600 font-sans font-medium">
-                Pharmacy Terminal • Counter #01
+                {store.tagline}
               </p>
               <p className="text-[10px] text-slate-600 font-sans">
-                Plot #42, Commercial Avenue, Health City
+                {store.address}
               </p>
               <p className="text-[10px] text-slate-600 font-sans">
-                Tel: +1 (555) 789-0123 • Reg: DL-9921-2026
+                Tel: {store.phone} • Reg: {store.licenseNumber}
               </p>
             </div>
 
@@ -157,7 +159,7 @@ export default function ReceiptModal({ sale, onClose, onNewSale }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">CASHIER:</span>
-                <span className="font-semibold">{sale.cashierName || 'Muhammad Shahis'}</span>
+                <span className="font-semibold">{sale.cashierName || store.defaultOperator}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">PATIENT:</span>

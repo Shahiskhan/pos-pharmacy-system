@@ -13,7 +13,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 700,
     frame: true, // Frame enabled as requested
-    title: 'Hafiz Pharmacy POS',
+    title: 'Generic Pharmacy POS',
     backgroundColor: '#0f172a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

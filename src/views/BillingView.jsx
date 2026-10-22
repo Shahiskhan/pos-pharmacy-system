@@ -23,8 +23,10 @@ import {
 import { getMedicines, searchMedicines } from '../services/localDb';
 import CheckoutModal from '../components/pos/CheckoutModal';
 import ReceiptModal from '../components/pos/ReceiptModal';
+import useStoreConfig from '../hooks/useStoreConfig';
 
 export default function BillingView({ isActive = true }) {
+  const store = useStoreConfig();
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [inventoryError, setInventoryError] = useState(null);
@@ -647,7 +649,7 @@ export default function BillingView({ isActive = true }) {
             <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 space-y-1">
               <div className="flex justify-between">
                 <span>Cashier Shift:</span>
-                <span className="font-semibold text-slate-800">Muhammad Shahis</span>
+                <span className="font-semibold text-slate-800">{store.defaultOperator}</span>
               </div>
               <div className="flex justify-between">
                 <span>Print Target:</span>

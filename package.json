@@ -1,7 +1,7 @@
 {
-  "name": "hafiz-pharmacy-pos",
+  "name": "generic-pharmacy-pos",
   "version": "1.0.0",
-  "description": "Hafiz Pharmacy POS desktop pharmacy management application",
+  "description": "White-label offline desktop pharmacy management and point-of-sale application",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -31,7 +31,7 @@
   },
   "build": {
     "appId": "com.pharmacy.pos",
-    "productName": "Hafiz Pharmacy POS",
+    "productName": "Generic Pharmacy POS",
     "directories": {
       "output": "release"
     },
@@ -55,7 +55,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Hafiz Pharmacy POS"
+      "shortcutName": "Generic Pharmacy POS"
     }
   }
 }

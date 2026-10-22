@@ -13,8 +13,10 @@ import {
   Loader2,
 } from 'lucide-react';
 import { recordSale } from '../../services/localDb';
+import useStoreConfig from '../../hooks/useStoreConfig';
 
 export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
+  const store = useStoreConfig();
   const [customerName, setCustomerName] = useState('Walk-in Customer');
   const [paymentMode, setPaymentMode] = useState('Cash'); // 'Cash' | 'Card' | 'Insurance'
 
@@ -120,7 +122,7 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
         paymentMode,
         cashTendered: paymentMode === 'Cash' ? cashTendered : grandTotal,
         changeReturned: paymentMode === 'Cash' ? changeReturned : 0,
-        cashierName: 'Muhammad Shahis',
+        cashierName: store.defaultOperator,
         customerName,
       });
 
@@ -159,7 +161,7 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
               <Banknote className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-bold text-sm">Hafiz Pharmacy POS Checkout</h3>
+              <h3 className="font-bold text-sm">{store.appName} Checkout</h3>
               <p className="text-[11px] text-slate-400">
                 {cart.length} medications • Total units: {cart.reduce((s, i) => s + (i.cartQuantity || 1), 0)}
               </p>

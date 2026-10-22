@@ -22,9 +22,12 @@ import {
   getSuppliers,
   clearAllData,
   exportDatabaseBackup,
+  saveStoreConfig,
 } from '../services/localDb';
+import useStoreConfig from '../hooks/useStoreConfig';
 
 export default function SettingsView() {
+  const store = useStoreConfig();
   const [stats, setStats] = useState({
     medicinesCount: 0,
     salesCount: 0,
@@ -39,6 +42,15 @@ export default function SettingsView() {
   const [confirmDataLoss, setConfirmDataLoss] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [storeNameInput, setStoreNameInput] = useState(store.appName);
+  const [licenseInput, setLicenseInput] = useState(store.licenseNumber);
+  const [isSavingStore, setIsSavingStore] = useState(false);
+  const [storeConfigError, setStoreConfigError] = useState(null);
+
+  useEffect(() => {
+    setStoreNameInput(store.appName);
+    setLicenseInput(store.licenseNumber);
+  }, [store.appName, store.licenseNumber]);
 
   const loadDatabaseStats = async () => {
     try {
@@ -78,7 +90,7 @@ export default function SettingsView() {
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute('href', dataStr);
       const dateStr = new Date().toISOString().split('T')[0];
-      downloadAnchor.setAttribute('download', `Hafiz_Pharmacy_POS_Backup_${dateStr}.json`);
+      downloadAnchor.setAttribute('download', `${store.appName.replace(/[^a-z0-9]+/gi, '_')}_Backup_${dateStr}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -86,6 +98,26 @@ export default function SettingsView() {
       triggerToast('Local database backup exported successfully (.json)');
     } catch (err) {
       alert(`Export failed: ${err.message}`);
+    }
+  };
+
+  const handleSaveStoreConfig = async (event) => {
+    event.preventDefault();
+    setIsSavingStore(true);
+    setStoreConfigError(null);
+    try {
+      const saved = await saveStoreConfig({
+        appName: storeNameInput,
+        licenseNumber: licenseInput,
+      });
+      setStoreNameInput(saved.appName);
+      setLicenseInput(saved.licenseNumber);
+      triggerToast('Store identity saved and applied across the application.');
+    } catch (error) {
+      console.error('Failed to save store identity:', error);
+      setStoreConfigError(error.message);
+    } finally {
+      setIsSavingStore(false);
     }
   };
 
@@ -147,6 +179,55 @@ export default function SettingsView() {
         </div>
       )}
 
+      <section className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div>
+          <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+            <FileText className="h-4 w-4 text-emerald-600" />
+            Store Identity & Receipt Details
+          </h3>
+          <p className="text-xs text-slate-500 mt-1">
+            Set the store name and license shown on receipts, reports, and purchase orders. Changes are saved locally.
+          </p>
+        </div>
+        {storeConfigError && (
+          <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            {storeConfigError}
+          </div>
+        )}
+        <form onSubmit={handleSaveStoreConfig} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label className="block text-xs font-semibold text-slate-700">
+            Store Name
+            <input
+              type="text"
+              required
+              maxLength={100}
+              value={storeNameInput}
+              onChange={(event) => setStoreNameInput(event.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+          </label>
+          <label className="block text-xs font-semibold text-slate-700">
+            Pharmacy License Number
+            <input
+              type="text"
+              maxLength={80}
+              value={licenseInput}
+              onChange={(event) => setLicenseInput(event.target.value)}
+              className="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+            />
+          </label>
+          <div className="sm:col-span-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={isSavingStore || !storeNameInput.trim()}
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white text-xs font-bold transition"
+            >
+              {isSavingStore ? 'Saving Store Identity...' : 'Save Store Identity'}
+            </button>
+          </div>
+        </form>
+      </section>
+
       {/* Terminal & Environment Specs */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -158,7 +239,7 @@ export default function SettingsView() {
           <div className="space-y-2.5 text-xs">
             <div className="flex justify-between py-1.5 border-b border-slate-100">
               <span className="text-slate-500">Pharmacy Name:</span>
-              <span className="font-bold text-slate-900">Hafiz Pharmacy POS</span>
+              <span className="font-bold text-slate-900">{store.appName}</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-slate-100">
               <span className="text-slate-500">Station / Counter:</span>
@@ -166,11 +247,11 @@ export default function SettingsView() {
             </div>
             <div className="flex justify-between py-1.5 border-b border-slate-100">
               <span className="text-slate-500">Active Operator:</span>
-              <span className="font-bold text-emerald-700">Muhammad Shahis</span>
+              <span className="font-bold text-emerald-700">{store.defaultOperator}</span>
             </div>
             <div className="flex justify-between py-1.5">
               <span className="text-slate-500">Assigned Shift:</span>
-              <span className="font-semibold text-slate-700">Lead Store Operator • Shift 1</span>
+              <span className="font-semibold text-slate-700">{store.defaultOperator}</span>
             </div>
           </div>
         </div>
@@ -184,7 +265,7 @@ export default function SettingsView() {
           <div className="space-y-2.5 text-xs">
             <div className="flex justify-between py-1.5 border-b border-slate-100">
               <span className="text-slate-500">Local Database:</span>
-              <span className="font-mono font-bold text-emerald-700">Hafiz Pharmacy POS LocalDB (IndexedDB)</span>
+              <span className="font-mono font-bold text-emerald-700">{store.appName} LocalDB (IndexedDB)</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-slate-100">
               <span className="text-slate-500">Network Dependency:</span>

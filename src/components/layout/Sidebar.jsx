@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ChevronRight,
 } from 'lucide-react';
+import useStoreConfig from '../../hooks/useStoreConfig';
 
 export const NAVIGATION_ITEMS = [
   {
@@ -81,6 +82,8 @@ export const NAVIGATION_ITEMS = [
 ];
 
 export default function Sidebar({ activeRoute, onNavigate }) {
+  const store = useStoreConfig();
+
   return (
     <aside className="w-64 flex-shrink-0 flex flex-col bg-slate-900 border-r border-slate-800 text-slate-300 select-none h-screen">
       {/* Brand & Pharmacy Identity */}
@@ -91,7 +94,7 @@ export default function Sidebar({ activeRoute, onNavigate }) {
         <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-slate-100 text-sm tracking-tight truncate">
-              Hafiz Pharmacy POS
+              {store.appName}
             </span>
           </div>
           <span className="text-[11px] font-medium text-emerald-400 truncate flex items-center gap-1">

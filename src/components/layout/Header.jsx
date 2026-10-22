@@ -7,8 +7,10 @@ import {
   Printer,
 } from 'lucide-react';
 import { NAVIGATION_ITEMS } from './Sidebar';
+import useStoreConfig from '../../hooks/useStoreConfig';
 
 export default function Header({ activeRoute }) {
+  const store = useStoreConfig();
   // Live Date & Time
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -16,6 +18,10 @@ export default function Header({ activeRoute }) {
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
+
+  useEffect(() => {
+    document.title = store.appName;
+  }, [store.appName]);
 
   useEffect(() => {
     // 1-second interval timer for POS accuracy
@@ -66,7 +72,7 @@ export default function Header({ activeRoute }) {
             {currentNav.label}
           </h1>
           <p className="text-xs text-slate-500 font-medium">
-            Hafiz Pharmacy POS • {currentNav.description}
+            {store.appName} • {currentNav.description}
           </p>
         </div>
       </div>
@@ -122,7 +128,7 @@ export default function Header({ activeRoute }) {
           <div className="flex items-center gap-2.5">
             <div className="relative">
               <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-white font-bold text-xs shadow-sm ring-2 ring-emerald-500/30">
-                MS
+                {store.defaultOperator.split(/\s+/).map((part) => part[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white"></span>
             </div>
@@ -130,11 +136,11 @@ export default function Header({ activeRoute }) {
             <div className="flex flex-col text-left">
               <div className="flex items-center gap-1">
                 <span className="text-xs font-bold text-slate-800 leading-tight">
-                  Muhammad Shahis
+                  {store.defaultOperator}
                 </span>
               </div>
               <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60 mt-0.5 inline-block w-max">
-                Lead Store Operator • Shift 1
+                {store.defaultOperator}
               </span>
             </div>
           </div>

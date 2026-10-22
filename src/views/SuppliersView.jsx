@@ -19,8 +19,10 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { getSuppliers, addSupplier, getMedicines } from '../services/localDb';
+import useStoreConfig from '../hooks/useStoreConfig';
 
 export default function SuppliersView() {
+  const store = useStoreConfig();
   const [suppliers, setSuppliers] = useState([]);
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -354,10 +356,10 @@ export default function SuppliersView() {
               {/* Header */}
               <div className="flex justify-between items-start border-b border-slate-200 pb-4">
                 <div>
-                  <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase">Hafiz Pharmacy POS</h1>
+                  <h1 className="text-lg font-black tracking-tight text-slate-950 uppercase">{store.appName}</h1>
                   <p className="text-slate-500 text-[11px]">Procurement Department</p>
-                  <p className="text-slate-500 text-[11px]">Plot #42, Commercial Avenue, Health City</p>
-                  <p className="text-slate-500 text-[11px]">Tel: +1 (555) 789-0123</p>
+                  <p className="text-slate-500 text-[11px]">{store.address}</p>
+                  <p className="text-slate-500 text-[11px]">Tel: {store.phone}</p>
                 </div>
 
                 <div className="text-right space-y-1">
@@ -385,10 +387,9 @@ export default function SuppliersView() {
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                     Ship & Bill To
                   </span>
-                  <p className="font-bold text-slate-900 text-sm mt-0.5">Hafiz Pharmacy POS</p>
-                  <p className="text-slate-600 text-[11px]">Desk Terminal #01 (Shift 1)</p>
-                  <p className="text-slate-600 text-[11px]">Operator: Muhammad Shahis</p>
-                  <p className="text-slate-600 text-[11px]">License: DL-9921-2026</p>
+                  <p className="font-bold text-slate-900 text-sm mt-0.5">{store.appName}</p>
+                  <p className="text-slate-600 text-[11px]">{store.defaultOperator}</p>
+                  <p className="text-slate-600 text-[11px]">License: {store.licenseNumber}</p>
                 </div>
               </div>
 
@@ -437,7 +438,7 @@ export default function SuppliersView() {
               <div className="flex justify-between items-end pt-2">
                 <div className="space-y-4">
                   <div className="pt-6 border-t border-slate-300 w-56 text-center">
-                    <p className="font-bold text-slate-800 text-xs">Muhammad Shahis</p>
+                    <p className="font-bold text-slate-800 text-xs">{store.defaultOperator}</p>
                     <p className="text-[10px] text-slate-500">Authorized Purchasing Pharmacist</p>
                   </div>
                 </div>

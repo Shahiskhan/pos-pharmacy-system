@@ -7,8 +7,10 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { getMedicines, getSales } from '../services/localDb';
+import useStoreConfig from '../hooks/useStoreConfig';
 
 export default function DashboardView({ onNavigate }) {
+  const store = useStoreConfig();
   const [medicines, setMedicines] = useState([]);
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,7 +76,7 @@ export default function DashboardView({ onNavigate }) {
           <span className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-100 text-xs font-semibold mb-2 backdrop-blur-sm">
             Ready for Billing • Fast Register
           </span>
-          <h2 className="text-2xl font-bold tracking-tight">Welcome back, Muhammad Shahis</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Welcome back, {store.defaultOperator}</h2>
           <p className="text-emerald-100 text-sm mt-1 max-w-xl">
             Register is open and connected to local IndexedDB engine. Press <kbd className="px-1.5 py-0.5 rounded bg-emerald-800/80 text-xs font-mono">F2</kbd> or click below to launch rapid POS billing.
           </p>

@@ -21,8 +21,10 @@ import {
   Receipt,
 } from 'lucide-react';
 import { getSales, getMedicines } from '../services/localDb';
+import useStoreConfig from '../hooks/useStoreConfig';
 
 export default function ReportsView() {
+  const store = useStoreConfig();
   const [sales, setSales] = useState([]);
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -213,9 +215,9 @@ export default function ReportsView() {
     try {
     // 1. Executive Summary Sheet
     const summaryData = [
-      { Metric: 'Report Name', Value: 'Hafiz Pharmacy POS Financial & Audit Ledger' },
+      { Metric: 'Report Name', Value: `${store.appName} Financial & Audit Ledger` },
       { Metric: 'Generated At', Value: new Date().toLocaleString() },
-      { Metric: 'Cashier / Operator', Value: 'Muhammad Shahis' },
+      { Metric: 'Cashier / Operator', Value: store.defaultOperator },
       { Metric: 'Total Gross Sales', Value: `$${analytics.grossRevenue}` },
       { Metric: 'Total Refunds Issued', Value: `-$${analytics.totalRefunds}` },
       { Metric: 'Net Sales Revenue', Value: `$${analytics.netRevenue}` },
@@ -276,7 +278,7 @@ export default function ReportsView() {
     XLSX.utils.book_append_sheet(workbook, wsTax, 'Tax_VAT_Breakdown');
 
     const dateStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(workbook, `Hafiz_Pharmacy_POS_Financial_Audit_${dateStr}.xlsx`);
+    XLSX.writeFile(workbook, `${store.appName.replace(/[^a-z0-9]+/gi, '_')}_Financial_Audit_${dateStr}.xlsx`);
     } catch (error) {
       window.alert(`Report export failed: ${error.message}`);
     }

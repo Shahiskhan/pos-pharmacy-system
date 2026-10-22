@@ -3,6 +3,7 @@
  * Zero-configuration local database that runs directly inside the browser/Electron renderer.
  * Collections: medicines, sales, suppliers
  */
+import { storeConfig as defaultStoreConfig } from '../config/storeConfig';
 
 const DB_NAME = 'PharmacyPOS_LocalDB';
 const DB_VERSION = 2;
@@ -13,6 +14,43 @@ export const STORES = {
   SUPPLIERS: 'suppliers',
   META: 'metadata',
 };
+
+export async function getStoreConfig() {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.META, 'readonly');
+    const request = tx.objectStore(STORES.META).get('storeConfig');
+
+    request.onsuccess = () => resolve({
+      ...defaultStoreConfig,
+      ...(request.result?.value || {}),
+    });
+    request.onerror = (event) => reject(event.target.error);
+  });
+}
+
+export async function saveStoreConfig(config) {
+  const db = await openDatabase();
+  const nextConfig = {
+    ...defaultStoreConfig,
+    appName: String(config.appName || '').trim(),
+    licenseNumber: String(config.licenseNumber || '').trim(),
+  };
+  if (!nextConfig.appName) {
+    throw new Error('Store name is required.');
+  }
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.META, 'readwrite');
+    tx.objectStore(STORES.META).put({ key: 'storeConfig', value: nextConfig });
+    tx.oncomplete = () => {
+      notifyDatabaseChange();
+      resolve(nextConfig);
+    };
+    tx.onerror = (event) => reject(event.target.error);
+    tx.onabort = (event) => reject(event.target.error || new Error('Saving store configuration was aborted.'));
+  });
+}
 
 // Default pre-populated suppliers
 const SEED_SUPPLIERS = [
@@ -393,7 +431,7 @@ export async function recordSale({
   paymentMode = 'Cash', // 'Cash' | 'Card' | 'Insurance'
   cashTendered = 0,
   changeReturned = 0,
-  cashierName = 'Muhammad Shahis',
+  cashierName = defaultStoreConfig.defaultOperator,
   customerName = 'Walk-in Customer',
 }) {
   const db = await openDatabase();
@@ -491,7 +529,7 @@ export async function processReturn({
   returnedItems, // array of { id, productName, batchNo, returnQuantity, unitPrice, lineRefund }
   refundAmount,
   reason = 'Customer Return',
-  cashierName = 'Muhammad Shahis',
+  cashierName = defaultStoreConfig.defaultOperator,
 }) {
   const db = await openDatabase();
   const timestamp = new Date().toISOString();
@@ -647,16 +685,18 @@ export async function clearAllData() {
  * Exports full IndexedDB collections into a JSON backup object
  */
 export async function exportDatabaseBackup() {
-  const [medicines, sales, suppliers] = await Promise.all([
+  const [medicines, sales, suppliers, config] = await Promise.all([
     getMedicines(),
     getSales(),
     getSuppliers(),
+    getStoreConfig(),
   ]);
 
   return {
-    appName: 'Hafiz Pharmacy POS',
+    appName: config.appName,
     version: '1.0.0',
     exportedAt: new Date().toISOString(),
+    storeConfig: config,
     collections: {
       medicines,
       sales,

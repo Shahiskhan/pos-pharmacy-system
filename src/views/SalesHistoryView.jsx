@@ -22,8 +22,10 @@ import {
 } from 'lucide-react';
 import { getSales, processReturn } from '../services/localDb';
 import ReceiptModal from '../components/pos/ReceiptModal';
+import useStoreConfig from '../hooks/useStoreConfig';
 
 export default function SalesHistoryView() {
+  const store = useStoreConfig();
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -217,7 +219,7 @@ export default function SalesHistoryView() {
         returnedItems: itemsToReturn,
         refundAmount: calculatedRefundTotal,
         reason: returnReason,
-        cashierName: 'Muhammad Shahis',
+        cashierName: store.defaultOperator,
       });
 
       triggerToast(
@@ -450,7 +452,7 @@ export default function SalesHistoryView() {
 
                       {/* Cashier */}
                       <td className="py-3 px-4 text-slate-600">
-                        {sale.cashierName || 'Muhammad Shahis'}
+                        {sale.cashierName || store.defaultOperator}
                       </td>
 
                       {/* Payment Mode */}

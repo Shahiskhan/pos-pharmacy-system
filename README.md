@@ -1,86 +1,145 @@
-# Hafiz Pharmacy POS
+# Generic Pharmacy POS
 
-### A Production-Ready, High-Speed, Offline-First Desktop Pharmacy Management & POS System
+### A modern, production-oriented desktop POS template for developers and pharmacies
 
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![Electron](https://img.shields.io/badge/Electron-33-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
-[![License](https://img.shields.io/badge/License-Not%20specified-lightgrey)](#license)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-## 💊 Project Overview
+Generic Pharmacy POS is a white-label pharmacy point-of-sale and inventory management template. It combines a fast checkout workflow, batch-aware stock management, reporting, and desktop packaging in a codebase developers can adapt for their own pharmacy or retail workflow.
 
-Hafiz Pharmacy POS is an offline-first Windows desktop point-of-sale and pharmacy management application built with Electron.js and React. It stores operational data locally in IndexedDB, so pharmacies can manage billing and inventory without cloud setup or an internet connection for normal day-to-day use. The application is designed for a responsive checkout workflow, local data ownership, and practical pharmacy stock management.
+> **Deployment note:** This repository provides application software, not pharmacy, tax, privacy, or regulatory advice. Before using it in a live store, validate workflows, receipt requirements, data protection, backups, and applicable local regulations for your deployment.
 
-## ✨ Key Features & Capabilities
+## 🧭 Architecture & Design Philosophy
 
-- **⚡ High-Speed POS Counter:** Barcode scanner input, FEFO (First Expiring, First Out) batch selection, live cart management, percentage and flat discounts, and dynamic cash change calculations.
-- **🧾 80mm Thermal Receipt Printing:** Print-focused thermal receipts with aligned content and a generated SVG barcode.
-- **📦 Inventory & Batch Tracking:** Batch-level stock and expiry tracking, expiry-risk alerts (including the 90-day warning window), low-stock warnings, and bulk stock imports from Excel (`.xlsx`) files.
-- **🔎 Master Medicine Catalog:** More than 150 pre-mapped common medicine shortcuts to speed up manual inventory entry. Catalog shortcuts are references only; they do not create stock until a user adds an inventory batch.
-- **↩️ Sales History & Restock Returns:** Itemized sales and return workflows, with returned quantities restored to inventory.
-- **📊 Analytics & Auto-PO Generator:** Reports based on local sales and inventory data, plus low-stock Purchase Order generation and XLSX exports.
-- **🛠️ System Maintenance:** Factory Reset / Clear Data controls and local JSON backup utilities.
+The application is designed around a **local-first / offline-first** model. The React renderer uses IndexedDB through [`src/services/localDb.js`](./src/services/localDb.js) for operational records such as inventory, batches, sales, suppliers, and local store configuration. This keeps common reads and writes on the device and avoids requiring a cloud account, server, or network connection for normal local workflows.
+
+The desktop application runs in Electron, while Vite also supports browser-based development. The UI is organized into views and reusable components; data access and business operations are kept in the local database service. Store branding can be changed through [`src/config/storeConfig.js`](./src/config/storeConfig.js), and store name/license overrides can be saved from the Settings view.
+
+Local-first storage means records belong to the application profile on that device. It is not automatically synchronized between computers. Set up and test a reliable backup and restore process before relying on a production deployment.
+
+## ✨ Capabilities
+
+- Barcode-oriented POS search and FEFO (First Expiring, First Out) batch selection
+- Cart checkout with percentage or fixed discounts, tax, and tender/change calculations
+- 80mm thermal receipt layout with a generated SVG barcode
+- Inventory and batch management with expiry and low-stock indicators
+- Common-medicine shortcut catalog for manual stock entry
+- Sales history, returns, and local stock restoration
+- Sales analytics, low-stock Purchase Order generation, and spreadsheet exports
+- Local JSON database backup and factory-reset controls
+- White-label store identity customization
 
 ## 🧰 Tech Stack
 
-| Area | Technology |
+| Layer | Technology |
 | --- | --- |
-| Frontend | React.js, Vite, Tailwind CSS, Lucide Icons |
-| Desktop framework | Electron.js |
-| Local database | IndexedDB (`src/services/localDb.js`) |
-| Spreadsheet import and export | SheetJS (`xlsx`) |
+| Frontend | React 18, Vite 6, Tailwind CSS 3, Lucide |
+| Desktop runtime | Electron 33 |
+| Local database | IndexedDB via `src/services/localDb.js` |
+| Spreadsheet import/export | SheetJS (`xlsx`) |
+| Desktop packaging | electron-builder (Windows NSIS installer) |
 
-## 🚀 Installation & Running Locally
+## 🗂️ Project Structure
+
+```text
+.
+├── electron/                 # Electron main and preload processes
+├── src/
+│   ├── components/
+│   │   ├── layout/           # App shell, navigation, and header
+│   │   └── pos/              # Checkout and receipt components
+│   ├── config/               # Default store identity and app configuration
+│   ├── hooks/                # Shared React hooks
+│   ├── services/             # IndexedDB persistence and data operations
+│   ├── utils/                # Shared static data and utilities
+│   ├── views/                # Dashboard, billing, inventory, reports, settings
+│   ├── App.jsx               # Application routes and layout
+│   ├── index.css             # Global styles and print rules
+│   └── main.jsx              # React application entry point
+├── index.html
+├── package.json
+└── vite.config.js
+```
+
+## 🚀 Quick Start for Developers
 
 ### Prerequisites
 
 - Node.js and npm
-- Windows for running or packaging the desktop application
+- Windows for building and running the packaged `.exe` installer
 
-### Clone the repository
-
-Replace `<repo_url>` with the URL of your repository:
+### Clone and install
 
 ```bash
 git clone <repo_url>
-cd hafiz-pharmacy-pos
-```
-
-### Install dependencies
-
-```bash
+cd <repository-directory>
 npm install
 ```
 
-### Start the Vite development server
+Replace `<repo_url>` with the repository URL and `<repository-directory>` with the directory created by `git clone`.
+
+### Run in browser mode
 
 ```bash
 npm run dev
 ```
 
-### Run the Electron desktop app in development
+Vite prints the local development URL in the terminal.
+
+### Run as an Electron desktop app
 
 ```bash
 npm run electron:dev
 ```
 
-### Build and package the Windows installer
+### Build a standalone Windows installer
 
 ```bash
 npm run electron:pack
 ```
 
-The packaging command builds the application and creates a Windows installer in the configured `release` output directory.
+The build output is written to `release/`. Packaging produces a Windows NSIS installer.
 
-## ⬇️ Release & Download
+### Validate a change
 
-Windows users can download the latest available `.exe` installer from the repository's **GitHub Releases** tab. Open the [Releases page](../../releases), select a release, and download its installer asset.
+```bash
+npm run build
+```
 
-## 👨‍💻 Author
+## 🏷️ Customization & White-Labeling
 
-**Muhammad Shahis** — Lead Software Engineer
+Edit [`src/config/storeConfig.js`](./src/config/storeConfig.js) to set the default store identity:
+
+```js
+export const storeConfig = {
+  appName: 'Your Pharmacy POS',
+  tagline: 'Advanced Desktop Pharmacy Management',
+  address: 'Your store address',
+  phone: 'Your store phone',
+  licenseNumber: 'Your pharmacy license',
+  defaultOperator: 'Store Operator • Shift 1',
+};
+```
+
+The store name and license number can also be changed in **Settings → Store Identity & Receipt Details**. Those two values are saved locally in IndexedDB and applied to supported application branding, receipts, reports, and purchase orders. The other fields above are source defaults; update the UI/data flow as needed if you want to edit them inside the application.
+
+To rebrand the Windows executable and shortcuts, update the `build.productName` and `build.nsis.shortcutName` values in `package.json`. The Electron window and HTML document titles currently use the generic default and can be changed in `electron/main.js` and `index.html` respectively.
+
+## 🤝 Contributing
+
+Contributions are welcome. To propose a change:
+
+1. Fork the repository and create a focused branch from the default branch.
+2. Keep changes scoped, follow the existing code patterns, and include tests or reproducible verification where practical.
+3. Run `npm run build` and review the resulting changes before opening a pull request.
+4. In the pull request, describe the user impact, implementation, and validation performed. Include screenshots for UI changes when useful.
+5. Do not include credentials, real patient information, or other sensitive production data in issues, pull requests, or test fixtures.
+
+For significant behavior or architecture changes, open an issue first to discuss the proposal.
 
 ## 📄 License
 
-No license has been specified in the repository yet. Until a license is added, all rights remain with the copyright holder; contact the project owner for permission to use, modify, or redistribute this software.
+This project is distributed under the [MIT License](./LICENSE). See the `LICENSE` file for the complete terms.
