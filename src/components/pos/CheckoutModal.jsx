@@ -12,13 +12,15 @@ import {
   ArrowRight,
   Loader2,
 } from 'lucide-react';
-import { recordSale } from '../../services/localDb';
+import { getCustomers, recordSale } from '../../services/localDb';
 import useStoreConfig from '../../hooks/useStoreConfig';
 
 export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
   const store = useStoreConfig();
   const [customerName, setCustomerName] = useState('Walk-in Customer');
-  const [paymentMode, setPaymentMode] = useState('Cash'); // 'Cash' | 'Card' | 'Insurance'
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [paymentMode, setPaymentMode] = useState('Cash');
 
   // Discounts & Tax
   const [discountType, setDiscountType] = useState('percent'); // 'percent' | 'fixed'
@@ -78,6 +80,17 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
   const cashTendered = Number.isFinite(enteredCash) ? Math.max(0, enteredCash) : 0;
   const changeReturned = Math.max(0, Number((cashTendered - grandTotal).toFixed(2)));
   const isShortOfCash = paymentMode === 'Cash' && cashTendered < grandTotal;
+  const isCredit = paymentMode === 'Credit / Udhaar';
+
+  useEffect(() => {
+    if (!isCredit) return;
+    getCustomers()
+      .then(setCustomers)
+      .catch((error) => {
+        console.error('Failed to load customers for credit checkout:', error);
+        setErrorMessage(`Unable to load customer accounts: ${error.message}`);
+      });
+  }, [isCredit]);
 
   // Quick cash tender helper buttons
   const getQuickTenders = () => {
@@ -93,6 +106,10 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
 
     if (isShortOfCash) {
       setErrorMessage(`Tendered cash ($${cashTendered.toFixed(2)}) is less than total payable ($${grandTotal.toFixed(2)}).`);
+      return;
+    }
+    if (isCredit && (!customerName.trim() || !customerPhone.trim())) {
+      setErrorMessage('Enter the customer name and phone number to record this credit sale.');
       return;
     }
 
@@ -120,10 +137,11 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
         tax: taxAmount,
         grandTotal,
         paymentMode,
-        cashTendered: paymentMode === 'Cash' ? cashTendered : grandTotal,
+        cashTendered: paymentMode === 'Cash' ? cashTendered : (isCredit ? 0 : grandTotal),
         changeReturned: paymentMode === 'Cash' ? changeReturned : 0,
         cashierName: store.defaultOperator,
         customerName,
+        customerPhone,
       });
 
       onSuccess(saleRecord);
@@ -204,11 +222,12 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
             <label className="block font-semibold text-slate-700 mb-1.5">
               Select Payment Mode
             </label>
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {[
                 { id: 'Cash', label: 'Cash', icon: Banknote },
                 { id: 'Card', label: 'Credit / Debit Card', icon: CreditCard },
                 { id: 'Insurance', label: 'Insurance / Credit', icon: Shield },
+                { id: 'Credit / Udhaar', label: 'Credit / Udhaar', icon: User },
               ].map((mode) => {
                 const Icon = mode.icon;
                 const isSelected = paymentMode === mode.id;
@@ -230,6 +249,43 @@ export default function CheckoutModal({ cart, subtotal, onClose, onSuccess }) {
               })}
             </div>
           </div>
+
+          {isCredit && (
+            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+              <label className="block font-semibold text-slate-700">
+                Existing Customer (optional)
+                <select
+                  value=""
+                  onChange={(event) => {
+                    const customer = customers.find((entry) => entry.id === event.target.value);
+                    if (customer) {
+                      setCustomerName(customer.name);
+                      setCustomerPhone(customer.phone);
+                    }
+                  }}
+                  className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 font-normal"
+                >
+                  <option value="">Select existing customer or enter a new one</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name} · {customer.phone} · Balance ${Number(customer.balance || 0).toFixed(2)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block font-semibold text-slate-700">
+                  Customer Name *
+                  <input required value={customerName === 'Walk-in Customer' ? '' : customerName} onChange={(event) => setCustomerName(event.target.value)} maxLength="120" placeholder="Full name" className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 font-normal" />
+                </label>
+                <label className="block font-semibold text-slate-700">
+                  Phone Number *
+                  <input required type="tel" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} maxLength="32" placeholder="Customer phone" className="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 font-normal" />
+                </label>
+              </div>
+              <p className="text-[11px] text-amber-900">This sale will be added to the customer’s outstanding balance.</p>
+            </div>
+          )}
 
           {/* Calculations & Discounts */}
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">

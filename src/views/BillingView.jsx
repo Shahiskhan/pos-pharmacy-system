@@ -25,6 +25,15 @@ import CheckoutModal from '../components/pos/CheckoutModal';
 import ReceiptModal from '../components/pos/ReceiptModal';
 import useStoreConfig from '../hooks/useStoreConfig';
 
+function isBatchExpired(expiryDate) {
+  if (!expiryDate) return false;
+  const expiry = new Date(`${expiryDate}T00:00:00`);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return expiry < today;
+}
+
 export default function BillingView({ isActive = true }) {
   const store = useStoreConfig();
   const [medicines, setMedicines] = useState([]);
@@ -38,6 +47,7 @@ export default function BillingView({ isActive = true }) {
   const searchInputRef = useRef(null);
   const searchRequestRef = useRef(0);
   const inventoryRequestRef = useRef(0);
+  const scannerRef = useRef({ value: '', lastKeyAt: 0, scanStartedAt: 0, isScannerInput: false });
 
   // Cart state
   const [cart, setCart] = useState([]);
@@ -122,6 +132,82 @@ export default function BillingView({ isActive = true }) {
     setTimeout(() => setWarningToast(null), 3000);
   };
 
+  const handleScannedBarcode = async (barcode) => {
+    try {
+      const currentInventory = await getMedicines();
+      const matchingBatches = currentInventory
+        .filter((medicine) => String(medicine.barcode || '').trim().toLowerCase() === barcode.toLowerCase())
+        .sort((a, b) => new Date(a.expiryDate || '2099-12-31') - new Date(b.expiryDate || '2099-12-31'));
+      if (matchingBatches.length === 0) {
+        showWarning(`No inventory batch found for barcode "${barcode}".`);
+        return;
+      }
+
+      const availableBatch = matchingBatches.find(
+        (batch) => Number(batch.quantity || 0) > 0 && !isBatchExpired(batch.expiryDate)
+      );
+      if (!availableBatch) {
+        const expiredBatch = matchingBatches.find((batch) => isBatchExpired(batch.expiryDate));
+        showWarning(expiredBatch
+          ? `EXPIRED - BLOCKED: "${expiredBatch.productName}" batch ${expiredBatch.batchNo || ''} cannot be sold.`
+          : `All batches for barcode "${barcode}" are out of stock.`);
+        return;
+      }
+      await handleAddToCart(availableBatch);
+    } catch (err) {
+      console.error('Failed to resolve scanned barcode from IndexedDB:', err);
+      setInventoryError(`Unable to look up scanned barcode: ${err.message}`);
+    }
+  };
+
+  useEffect(() => {
+    const handleScannerKeydown = (event) => {
+      if (!isActive || showCheckoutModal || completedSale || event.ctrlKey || event.altKey || event.metaKey) return;
+
+      const now = performance.now();
+      const scanner = scannerRef.current;
+      if (event.key === 'Enter') {
+        const isFastScan = scanner.isScannerInput &&
+          scanner.value.length >= 4 &&
+          now - scanner.scanStartedAt <= 1200 &&
+          now - scanner.lastKeyAt <= 120;
+        scannerRef.current = { value: '', lastKeyAt: 0, scanStartedAt: 0, isScannerInput: false };
+        if (isFastScan) {
+          event.preventDefault();
+          event.stopPropagation();
+          handleScannedBarcode(scanner.value);
+        }
+        return;
+      }
+
+      if (event.key.length !== 1 || !/^[a-zA-Z0-9-]$/.test(event.key)) {
+        scannerRef.current = { value: '', lastKeyAt: 0, scanStartedAt: 0, isScannerInput: false };
+        return;
+      }
+
+      const gap = now - scanner.lastKeyAt;
+      if (!scanner.lastKeyAt || gap > 70) {
+        scannerRef.current = {
+          value: event.key,
+          lastKeyAt: now,
+          scanStartedAt: now,
+          isScannerInput: false,
+        };
+      } else {
+        const value = `${scanner.value}${event.key}`;
+        scannerRef.current = {
+          value,
+          lastKeyAt: now,
+          scanStartedAt: scanner.scanStartedAt,
+          isScannerInput: scanner.isScannerInput || value.length >= 4,
+        };
+      }
+    };
+
+    window.addEventListener('keydown', handleScannerKeydown, true);
+    return () => window.removeEventListener('keydown', handleScannerKeydown, true);
+  }, [isActive, showCheckoutModal, completedSale]);
+
   /**
    * FEFO Intelligent Item Addition:
    * If a medicine item is passed, selects the earliest expiring batch with stock > 0
@@ -157,7 +243,18 @@ export default function BillingView({ isActive = true }) {
       });
 
     // Find first batch with available stock
-    const fefoBatch = batches.find((batch) => Number(batch.quantity || 0) > 0) || currentRecord;
+    const fefoBatch = batches.find(
+      (batch) => Number(batch.quantity || 0) > 0 && !isBatchExpired(batch.expiryDate)
+    );
+    if (!fefoBatch) {
+      const expiredBatch = batches.find((batch) => isBatchExpired(batch.expiryDate));
+      if (expiredBatch) {
+        showWarning(`EXPIRED - BLOCKED: "${expiredBatch.productName}" batch ${expiredBatch.batchNo || ''} cannot be sold.`);
+        return;
+      }
+      showWarning(`"${currentRecord.productName}" is out of stock.`);
+      return;
+    }
 
     const availableStock = Number(fefoBatch.quantity || 0);
     if (availableStock <= 0) {
@@ -239,6 +336,11 @@ export default function BillingView({ isActive = true }) {
     const newBatch = medicines.find((m) => m.id === newBatchId);
     if (!newBatch) return;
 
+    if (isBatchExpired(newBatch.expiryDate)) {
+      showWarning(`EXPIRED - BLOCKED: Batch ${newBatch.batchNo} cannot be selected for sale.`);
+      return;
+    }
+
     const maxStock = Number(newBatch.quantity || 0);
     if (maxStock <= 0) {
       showWarning(`Batch ${newBatch.batchNo} is currently out of stock.`);
@@ -316,6 +418,7 @@ export default function BillingView({ isActive = true }) {
     0
   );
   const totalItemsCount = cart.reduce((acc, item) => acc + (item.cartQuantity || 1), 0);
+  const hasExpiredCartItems = cart.some((item) => isBatchExpired(item.expiryDate));
 
   // Global Keyboard Shortcuts (F2 Checkout, F4 Clear Cart, / or Esc Focus)
   useEffect(() => {
@@ -324,7 +427,7 @@ export default function BillingView({ isActive = true }) {
 
       if (e.key === 'F2') {
         e.preventDefault();
-        if (cart.length > 0 && !showCheckoutModal) {
+        if (cart.length > 0 && !hasExpiredCartItems && !showCheckoutModal) {
           setShowCheckoutModal(true);
         }
       } else if (e.key === 'F4') {
@@ -338,13 +441,18 @@ export default function BillingView({ isActive = true }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cart, isActive, showCheckoutModal]);
+  }, [cart, hasExpiredCartItems, isActive, showCheckoutModal]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-5.5rem)] gap-4 select-none">
       {inventoryError && (
         <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-medium text-rose-800">
           {inventoryError}
+        </div>
+      )}
+      {hasExpiredCartItems && (
+        <div role="alert" className="rounded-xl border-2 border-rose-500 bg-rose-100 px-4 py-3 text-sm font-black tracking-wide text-rose-900">
+          EXPIRED - BLOCKED: Remove expired batch items before checkout.
         </div>
       )}
 
@@ -387,13 +495,17 @@ export default function BillingView({ isActive = true }) {
               </div>
               {matchingMedicines.map((med) => {
                 const isOutOfStock = Number(med.quantity || 0) <= 0;
+                const isExpired = isBatchExpired(med.expiryDate);
                 return (
                   <div
                     key={med.id}
-                    onClick={() => handleAddToCart(med)}
-                    className={`p-3 flex items-center justify-between cursor-pointer transition ${
-                      isOutOfStock
-                        ? 'opacity-50 bg-slate-50'
+                    onClick={() => !isExpired && !isOutOfStock && handleAddToCart(med)}
+                    aria-disabled={isExpired || isOutOfStock}
+                    className={`p-3 flex items-center justify-between transition ${
+                      isExpired
+                        ? 'cursor-not-allowed bg-rose-50'
+                        : isOutOfStock
+                        ? 'cursor-not-allowed opacity-50 bg-slate-50'
                         : 'hover:bg-emerald-50/70'
                     }`}
                   >
@@ -402,6 +514,7 @@ export default function BillingView({ isActive = true }) {
                         <span className="font-bold text-slate-900 text-xs truncate">
                           {med.productName}
                         </span>
+                        {isExpired && <span className="rounded bg-rose-700 px-1.5 py-0.5 text-[9px] font-black tracking-wide text-white">EXPIRED - BLOCKED</span>}
                         <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-mono">
                           Batch: {med.batchNo}
                         </span>
@@ -414,7 +527,7 @@ export default function BillingView({ isActive = true }) {
                     <div className="flex items-center gap-4 text-right flex-shrink-0">
                       <div>
                         <span className="text-[10px] text-slate-400 block">Expiry</span>
-                        <span className="text-[11px] font-mono text-slate-700">
+                        <span className={`text-[11px] font-mono ${isExpired ? 'font-black text-rose-700' : 'text-slate-700'}`}>
                           {med.expiryDate}
                         </span>
                       </div>
@@ -517,14 +630,16 @@ export default function BillingView({ isActive = true }) {
                         {/* Batch & FEFO Selector */}
                         <td className="py-3 px-3">
                           <div className="flex items-center gap-1.5">
-                            {item.availableBatches && item.availableBatches.length > 1 ? (
+                            {isBatchExpired(item.expiryDate) ? (
+                              <span className="rounded bg-rose-700 px-1.5 py-1 text-[9px] font-black text-white">EXPIRED - BLOCKED</span>
+                            ) : item.availableBatches && item.availableBatches.length > 1 ? (
                               <select
                                 value={item.id}
                                 onChange={(e) => handleSwitchBatch(item.id, e.target.value)}
                                 className="px-2 py-0.5 rounded border border-slate-300 text-xs font-mono font-bold text-slate-800 bg-white focus:outline-none"
                               >
                                 {item.availableBatches.map((b) => (
-                                  <option key={b.id} value={b.id}>
+                                  <option key={b.id} value={b.id} disabled={isBatchExpired(b.expiryDate) || Number(b.quantity) <= 0}>
                                     {b.batchNo} (Exp: {b.expiryDate} • {b.quantity} left)
                                   </option>
                                 ))}
@@ -660,8 +775,8 @@ export default function BillingView({ isActive = true }) {
 
           <div className="space-y-2 pt-4">
             <button
-              onClick={() => setShowCheckoutModal(true)}
-              disabled={cart.length === 0}
+              onClick={() => !hasExpiredCartItems && setShowCheckoutModal(true)}
+              disabled={cart.length === 0 || hasExpiredCartItems}
               className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] disabled:bg-slate-300 text-white font-extrabold text-sm shadow-lg shadow-emerald-700/25 transition flex items-center justify-center gap-2"
             >
               <Banknote className="h-5 w-5" />

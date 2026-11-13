@@ -13,6 +13,19 @@ body {
   height: 100vh;
 }
 
+.admin-portal input:not([type='checkbox']),
+.admin-portal textarea,
+.admin-portal select {
+  color: #0f172a;
+  caret-color: #059669;
+}
+
+.admin-portal input::placeholder,
+.admin-portal textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
 /* 80mm Thermal Receipt Strict Print Stylesheet */
 @media print {
   html, body {
@@ -46,12 +59,12 @@ body {
     visibility: hidden !important;
   }
 
-  #printable-receipt,
-  #printable-receipt * {
+  body[data-print-target="receipt"] #printable-receipt,
+  body[data-print-target="receipt"] #printable-receipt * {
     visibility: visible !important;
   }
 
-  #printable-receipt {
+  body[data-print-target="receipt"] #printable-receipt {
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;
@@ -66,12 +79,12 @@ body {
     page: receipt;
   }
 
-  #printable-purchase-order,
-  #printable-purchase-order * {
+  body[data-print-target="purchase-order"] #printable-purchase-order,
+  body[data-print-target="purchase-order"] #printable-purchase-order * {
     visibility: visible !important;
   }
 
-  #printable-purchase-order {
+  body[data-print-target="purchase-order"] #printable-purchase-order {
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;
@@ -84,12 +97,12 @@ body {
     page: purchase-order;
   }
 
-  #printable-report,
-  #printable-report * {
+  body[data-print-target="report"] #printable-report,
+  body[data-print-target="report"] #printable-report * {
     visibility: visible !important;
   }
 
-  #printable-report {
+  body[data-print-target="report"] #printable-report {
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;

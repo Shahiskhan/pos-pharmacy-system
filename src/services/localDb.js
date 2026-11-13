@@ -1,17 +1,18 @@
 /**
  * Local IndexedDB Storage Engine for Desktop Pharmacy POS
  * Zero-configuration local database that runs directly inside the browser/Electron renderer.
- * Collections: medicines, sales, suppliers
+ * Collections: medicines, sales, suppliers, customers, metadata
  */
 import { storeConfig as defaultStoreConfig } from '../config/storeConfig';
 
 const DB_NAME = 'PharmacyPOS_LocalDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export const STORES = {
   MEDICINES: 'medicines',
   SALES: 'sales',
   SUPPLIERS: 'suppliers',
+  CUSTOMERS: 'customers',
   META: 'metadata',
 };
 
@@ -110,6 +111,11 @@ function openDatabase() {
       if (!db.objectStoreNames.contains(STORES.SUPPLIERS)) {
         const suppliersStore = db.createObjectStore(STORES.SUPPLIERS, { keyPath: 'id' });
         suppliersStore.createIndex('company', 'company', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORES.CUSTOMERS)) {
+        const customerStore = db.createObjectStore(STORES.CUSTOMERS, { keyPath: 'id' });
+        customerStore.createIndex('phone', 'phone', { unique: false });
       }
 
       if (!db.objectStoreNames.contains(STORES.META)) {
@@ -433,6 +439,7 @@ export async function recordSale({
   changeReturned = 0,
   cashierName = defaultStoreConfig.defaultOperator,
   customerName = 'Walk-in Customer',
+  customerPhone = '',
 }) {
   const db = await openDatabase();
   const timestamp = new Date().toISOString();
@@ -466,38 +473,120 @@ export async function recordSale({
     changeReturned: Number(Number(changeReturned).toFixed(2)),
     cashierName,
     customerName: customerName || 'Walk-in Customer',
+    customerPhone: String(customerPhone || '').trim(),
     timestamp,
     returns: [],
   };
 
   return new Promise((resolve, reject) => {
-    // Transaction updates sales AND deducts medicine inventory atomically
-    const tx = db.transaction([STORES.SALES, STORES.MEDICINES], 'readwrite');
+    if (paymentMode === 'Credit / Udhaar' && (!saleRecord.customerName.trim() || !saleRecord.customerPhone.trim())) {
+      reject(new Error('Customer name and phone number are required for credit sales.'));
+      return;
+    }
+    if (paymentMode === 'Credit / Udhaar' && normalizeCustomerPhone(saleRecord.customerPhone).length < 4) {
+      reject(new Error('Enter a valid customer phone number for credit sales.'));
+      return;
+    }
+    if (items.some((item) => !item.id)) {
+      reject(new Error('Every cart item must reference an inventory batch.'));
+      return;
+    }
+
+    const storeNames = [STORES.SALES, STORES.MEDICINES];
+    if (paymentMode === 'Credit / Udhaar') storeNames.push(STORES.CUSTOMERS);
+    const tx = db.transaction(storeNames, 'readwrite');
     const salesStore = tx.objectStore(STORES.SALES);
     const medicineStore = tx.objectStore(STORES.MEDICINES);
+    const customerStore = paymentMode === 'Credit / Udhaar'
+      ? tx.objectStore(STORES.CUSTOMERS)
+      : null;
 
     salesStore.add(saleRecord);
 
-    // Atomic Stock deduction per batch
+    // Sale, inventory deduction, and any customer credit are committed together.
+    let inventoryValidationError = null;
     items.forEach((item) => {
-      if (item.id) {
-        const getReq = medicineStore.get(item.id);
-        getReq.onsuccess = () => {
-          const med = getReq.result;
-          if (med) {
-            med.quantity = Math.max(0, (Number(med.quantity) || 0) - (Number(item.quantity) || 0));
-            medicineStore.put(med);
-          }
-        };
-      }
+      const getReq = medicineStore.get(item.id);
+      getReq.onsuccess = () => {
+        if (inventoryValidationError) return;
+        const med = getReq.result;
+        if (!med) {
+          inventoryValidationError = `Medicine batch ${item.batchNo || item.id} is no longer in inventory.`;
+          tx.abort();
+          return;
+        }
+        if (isMedicineExpired(med.expiryDate)) {
+          inventoryValidationError = `${med.productName} batch ${med.batchNo || ''} is expired and cannot be sold.`;
+          tx.abort();
+          return;
+        }
+        const availableQuantity = Number(med.quantity) || 0;
+        if (availableQuantity < Number(item.quantity || 0)) {
+          inventoryValidationError = `Insufficient stock for ${med.productName} batch ${med.batchNo || ''}.`;
+          tx.abort();
+          return;
+        }
+        med.quantity = availableQuantity - (Number(item.quantity) || 0);
+        medicineStore.put(med);
+      };
     });
+
+    if (customerStore) {
+      const phoneKey = normalizeCustomerPhone(saleRecord.customerPhone);
+      const allCustomersRequest = customerStore.getAll();
+      allCustomersRequest.onsuccess = () => {
+        const existingCustomer = allCustomersRequest.result.find(
+          (customer) => normalizeCustomerPhone(customer.phone) === phoneKey
+        );
+        const customer = existingCustomer || {
+          id: `customer-${phoneKey}`,
+          name: saleRecord.customerName.trim(),
+          phone: saleRecord.customerPhone,
+          totalCredit: 0,
+          totalPaid: 0,
+          balance: 0,
+          ledger: [],
+        };
+        customer.name = saleRecord.customerName.trim();
+        customer.phone = saleRecord.customerPhone;
+        customer.totalCredit = Number(((Number(customer.totalCredit) || 0) + saleRecord.grandTotal).toFixed(2));
+        customer.balance = Number(((Number(customer.balance) || 0) + saleRecord.grandTotal).toFixed(2));
+        customer.ledger = Array.isArray(customer.ledger) ? customer.ledger : [];
+        customer.ledger.push({
+          id: `ledger-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          type: 'credit',
+          amount: saleRecord.grandTotal,
+          saleId: saleRecord.id,
+          invoiceNo: saleRecord.invoiceNo,
+          timestamp,
+          note: 'Credit sale',
+        });
+        saleRecord.customerId = customer.id;
+        salesStore.put(saleRecord);
+        customerStore.put(customer);
+      };
+    }
 
     tx.oncomplete = () => {
       notifyDatabaseChange();
       resolve(saleRecord);
     };
-    tx.onerror = (e) => reject(e.target.error);
+    tx.onerror = (e) => reject(inventoryValidationError || e.target.error);
+    tx.onabort = (e) => reject(inventoryValidationError || e.target.error || new Error('Sale transaction was aborted.'));
   });
+}
+
+function isMedicineExpired(expiryDate) {
+  if (!expiryDate) return false;
+  const expiry = new Date(`${expiryDate}T00:00:00`);
+  if (Number.isNaN(expiry.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return expiry < today;
+}
+
+function normalizeCustomerPhone(phone) {
+  return String(phone || '').replace(/\D/g, '');
 }
 
 export async function getSales() {
@@ -536,9 +625,16 @@ export async function processReturn({
   const returnId = `ret-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction([STORES.SALES, STORES.MEDICINES], 'readwrite');
+    const transactionStores = [STORES.SALES, STORES.MEDICINES];
+    if (saleId && returnedItems && returnedItems.length) {
+      transactionStores.push(STORES.CUSTOMERS);
+    }
+    const tx = db.transaction(transactionStores, 'readwrite');
     const salesStore = tx.objectStore(STORES.SALES);
     const medicineStore = tx.objectStore(STORES.MEDICINES);
+    const customerStore = transactionStores.includes(STORES.CUSTOMERS)
+      ? tx.objectStore(STORES.CUSTOMERS)
+      : null;
 
     const getSaleReq = salesStore.get(saleId);
     getSaleReq.onsuccess = () => {
@@ -597,6 +693,28 @@ export async function processReturn({
       };
       sale.returns.push(returnEntry);
 
+      if (customerStore && sale.paymentMode === 'Credit / Udhaar' && sale.customerId) {
+        const customerRequest = customerStore.get(sale.customerId);
+        customerRequest.onsuccess = () => {
+          const customer = customerRequest.result;
+          if (!customer) return;
+          const balance = Number(customer.balance) || 0;
+          const accountCredit = Math.min(balance, totalRefund);
+          customer.balance = Number((balance - accountCredit).toFixed(2));
+          customer.ledger = Array.isArray(customer.ledger) ? customer.ledger : [];
+          customer.ledger.push({
+            id: `ledger-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            type: 'credit-return',
+            amount: accountCredit,
+            saleId: sale.id,
+            invoiceNo: sale.invoiceNo,
+            timestamp,
+            note: 'Credit sale return adjustment',
+          });
+          customerStore.put(customer);
+        };
+      }
+
       salesStore.put(sale);
     };
 
@@ -624,6 +742,77 @@ export async function getSuppliers() {
 
     request.onsuccess = () => resolve(request.result || []);
     request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+export async function getCustomers() {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.CUSTOMERS, 'readonly');
+    const request = tx.objectStore(STORES.CUSTOMERS).getAll();
+    request.onsuccess = () => resolve((request.result || []).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))));
+    request.onerror = (event) => reject(event.target.error);
+  });
+}
+
+export async function getDatabaseMetadata() {
+  const db = await openDatabase();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.META, 'readonly');
+    const request = tx.objectStore(STORES.META).getAll();
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = (event) => reject(event.target.error);
+  });
+}
+
+export async function recordCustomerPayment(customerId, amount, note = '') {
+  const paymentAmount = Number(amount);
+  if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+    throw new Error('Payment amount must be greater than zero.');
+  }
+
+  const db = await openDatabase();
+  const timestamp = new Date().toISOString();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORES.CUSTOMERS, 'readwrite');
+    const store = tx.objectStore(STORES.CUSTOMERS);
+    const request = store.get(customerId);
+    let updatedCustomer;
+
+    request.onsuccess = () => {
+      const customer = request.result;
+      if (!customer) {
+        tx.abort();
+        reject(new Error('Customer record was not found.'));
+        return;
+      }
+      const balance = Number(customer.balance) || 0;
+      if (paymentAmount > balance) {
+        tx.abort();
+        reject(new Error(`Payment cannot exceed the outstanding balance of ${balance.toFixed(2)}.`));
+        return;
+      }
+
+      customer.totalPaid = Number(((Number(customer.totalPaid) || 0) + paymentAmount).toFixed(2));
+      customer.balance = Number((balance - paymentAmount).toFixed(2));
+      customer.ledger = Array.isArray(customer.ledger) ? customer.ledger : [];
+      customer.ledger.push({
+        id: `ledger-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        type: 'payment',
+        amount: paymentAmount,
+        timestamp,
+        note: String(note || '').trim() || 'Customer repayment',
+      });
+      updatedCustomer = customer;
+      store.put(customer);
+    };
+
+    tx.oncomplete = () => {
+      notifyDatabaseChange();
+      resolve(updatedCustomer);
+    };
+    tx.onerror = (event) => reject(event.target.error);
+    tx.onabort = (event) => reject(event.target.error || new Error('Recording customer payment was aborted.'));
   });
 }
 
@@ -656,17 +845,19 @@ export async function clearAllData() {
   const db = await openDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(
-      [STORES.MEDICINES, STORES.SALES, STORES.SUPPLIERS, STORES.META],
+      [STORES.MEDICINES, STORES.SALES, STORES.SUPPLIERS, STORES.CUSTOMERS, STORES.META],
       'readwrite'
     );
     const medStore = tx.objectStore(STORES.MEDICINES);
     const salesStore = tx.objectStore(STORES.SALES);
     const supStore = tx.objectStore(STORES.SUPPLIERS);
+    const customerStore = tx.objectStore(STORES.CUSTOMERS);
     const metaStore = tx.objectStore(STORES.META);
 
     medStore.clear();
     salesStore.clear();
     supStore.clear();
+    customerStore.clear();
     metaStore.put({ key: 'initialized', value: true });
 
     tx.oncomplete = () => {
@@ -685,11 +876,13 @@ export async function clearAllData() {
  * Exports full IndexedDB collections into a JSON backup object
  */
 export async function exportDatabaseBackup() {
-  const [medicines, sales, suppliers, config] = await Promise.all([
+  const [medicines, sales, suppliers, customers, config, metadata] = await Promise.all([
     getMedicines(),
     getSales(),
     getSuppliers(),
+    getCustomers(),
     getStoreConfig(),
+    getDatabaseMetadata(),
   ]);
 
   return {
@@ -697,15 +890,18 @@ export async function exportDatabaseBackup() {
     version: '1.0.0',
     exportedAt: new Date().toISOString(),
     storeConfig: config,
+    metadataStore: metadata,
     collections: {
       medicines,
       sales,
       suppliers,
+      customers,
     },
     metadata: {
       totalMedicines: medicines.length,
       totalSales: sales.length,
       totalSuppliers: suppliers.length,
+      totalCustomers: customers.length,
     },
   };
 }

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { getSales, getMedicines } from '../services/localDb';
 import useStoreConfig from '../hooks/useStoreConfig';
+import { printDocument } from '../utils/printing';
 
 export default function ReportsView() {
   const store = useStoreConfig();
@@ -31,6 +32,15 @@ export default function ReportsView() {
   const [dataError, setDataError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'daily' | 'taxes' | 'top-products'
+
+  const handlePrintReport = async () => {
+    try {
+      await printDocument('report');
+    } catch (error) {
+      console.error('Report printing failed:', error);
+      window.alert(`Report printing failed: ${error.message}`);
+    }
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -71,11 +81,12 @@ export default function ReportsView() {
     let cashTotal = 0;
     let cardTotal = 0;
     let insuranceTotal = 0;
+    let creditTotal = 0;
 
     let taxableSales = 0;
     let exemptSales = 0;
 
-    const dailyMap = new Map(); // 'YYYY-MM-DD' => { date, count, gross, refunds, net, tax, cash, card, insurance }
+    const dailyMap = new Map(); // 'YYYY-MM-DD' => { date, count, gross, refunds, net, tax, cash, card, insurance, credit }
     const productMap = new Map(); // 'name' => { name, saltName, category, unitsSold, revenue, cost, profit }
 
     // Map medicines by ID or Name to look up purchase cost
@@ -114,6 +125,7 @@ export default function ReportsView() {
 
       if (s.paymentMode === 'Card') cardTotal += paidTotal;
       else if (s.paymentMode === 'Insurance') insuranceTotal += paidTotal;
+      else if (s.paymentMode === 'Credit / Udhaar') creditTotal += paidTotal;
       else cashTotal += paidTotal;
 
       // Group by Date
@@ -129,6 +141,7 @@ export default function ReportsView() {
           cash: 0,
           card: 0,
           insurance: 0,
+          credit: 0,
         });
       }
       const dayRec = dailyMap.get(dateKey);
@@ -139,6 +152,7 @@ export default function ReportsView() {
       dayRec.tax += t;
       if (s.paymentMode === 'Card') dayRec.card += paidTotal;
       else if (s.paymentMode === 'Insurance') dayRec.insurance += paidTotal;
+      else if (s.paymentMode === 'Credit / Udhaar') dayRec.credit += paidTotal;
       else dayRec.cash += paidTotal;
 
       // Process Line Items for Product Analytics & COGS
@@ -205,6 +219,7 @@ export default function ReportsView() {
       cashTotal: cashTotal.toFixed(2),
       cardTotal: cardTotal.toFixed(2),
       insuranceTotal: insuranceTotal.toFixed(2),
+      creditTotal: creditTotal.toFixed(2),
       dailySummary,
       topProducts,
     };
@@ -228,6 +243,7 @@ export default function ReportsView() {
       { Metric: 'Cash In Drawer', Value: `$${analytics.cashTotal}` },
       { Metric: 'Card Terminal Settlements', Value: `$${analytics.cardTotal}` },
       { Metric: 'Insurance Claims', Value: `$${analytics.insuranceTotal}` },
+      { Metric: 'Customer Credit Outstanding Sales', Value: `$${analytics.creditTotal}` },
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summaryData);
     wsSummary['!cols'] = [{ wch: 30 }, { wch: 30 }];
@@ -243,9 +259,10 @@ export default function ReportsView() {
       Cash: `$${d.cash.toFixed(2)}`,
       Card: `$${d.card.toFixed(2)}`,
       Insurance: `$${d.insurance.toFixed(2)}`,
+      Credit: `$${d.credit.toFixed(2)}`,
     }));
     const wsDaily = XLSX.utils.json_to_sheet(dailyRows, {
-      header: ['Date', 'Invoices', 'GrossSales', 'Refunds', 'NetSales', 'VATCollected', 'Cash', 'Card', 'Insurance'],
+      header: ['Date', 'Invoices', 'GrossSales', 'Refunds', 'NetSales', 'VATCollected', 'Cash', 'Card', 'Insurance', 'Credit'],
     });
 
     // 3. Top Products Sheet
@@ -311,7 +328,7 @@ export default function ReportsView() {
             Refresh
           </button>
           <button
-            onClick={() => window.print()}
+            onClick={handlePrintReport}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs transition"
           >
             <Printer className="h-4 w-4 text-slate-500" />

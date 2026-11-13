@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Printer, X } from 'lucide-react';
 import useStoreConfig from '../../hooks/useStoreConfig';
+import { printDocument } from '../../utils/printing';
 
 const CODE39_PATTERNS = {
   '0': 'nnnwwnwnn', '1': 'wnnwnnnnw', '2': 'nnwwnnnnw', '3': 'wnwwnnnnn',
@@ -51,7 +52,14 @@ function BarcodeSvg({ value }) {
 
 export default function ReceiptModal({ sale, onClose, onNewSale }) {
   const store = useStoreConfig();
-  const handlePrint = () => window.print();
+  const handlePrint = async () => {
+    try {
+      await printDocument('receipt');
+    } catch (error) {
+      console.error('Receipt printing failed:', error);
+      window.alert(`Receipt printing failed: ${error.message}`);
+    }
+  };
 
   // Keyboard shortcut: Enter or P to print, Escape to close
   useEffect(() => {

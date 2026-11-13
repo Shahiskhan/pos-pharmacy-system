@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { getSuppliers, addSupplier, getMedicines } from '../services/localDb';
 import useStoreConfig from '../hooks/useStoreConfig';
+import { printDocument } from '../utils/printing';
 
 export default function SuppliersView() {
   const store = useStoreConfig();
@@ -31,6 +32,15 @@ export default function SuppliersView() {
 
   // Auto PO Generator Modal
   const [selectedPO, setSelectedPO] = useState(null); // stores { poNumber, supplier, items, totalCost, date }
+
+  const handlePrintPurchaseOrder = async () => {
+    try {
+      await printDocument('purchase-order');
+    } catch (error) {
+      console.error('Purchase order printing failed:', error);
+      window.alert(`Purchase order printing failed: ${error.message}`);
+    }
+  };
 
   const [newSupplier, setNewSupplier] = useState({
     name: '',
@@ -335,7 +345,7 @@ export default function SuppliersView() {
               </span>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.print()}
+                  onClick={handlePrintPurchaseOrder}
                   className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition flex items-center gap-1.5"
                 >
                   <Printer className="h-3.5 w-3.5" />

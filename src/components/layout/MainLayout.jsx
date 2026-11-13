@@ -30,21 +30,13 @@ export default function MainLayout({ activeRoute, onNavigate, children }) {
             onNavigate('sales-history');
           }
           break;
-        case 'F5':
+        case 'F9':
           e.preventDefault();
-          onNavigate('excel-import');
+          onNavigate('customer-ledger');
           break;
-        case 'F6':
+        case 'F10':
           e.preventDefault();
-          onNavigate('suppliers');
-          break;
-        case 'F7':
-          e.preventDefault();
-          onNavigate('reports');
-          break;
-        case 'F8':
-          e.preventDefault();
-          onNavigate('settings');
+          onNavigate('admin');
           break;
         default:
           break;

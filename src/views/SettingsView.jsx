@@ -20,6 +20,7 @@ import {
   getMedicines,
   getSales,
   getSuppliers,
+  getCustomers,
   clearAllData,
   exportDatabaseBackup,
   saveStoreConfig,
@@ -32,6 +33,7 @@ export default function SettingsView() {
     medicinesCount: 0,
     salesCount: 0,
     suppliersCount: 0,
+    customersCount: 0,
   });
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState(null);
@@ -54,15 +56,17 @@ export default function SettingsView() {
 
   const loadDatabaseStats = async () => {
     try {
-      const [meds, sales, sups] = await Promise.all([
+      const [meds, sales, sups, customers] = await Promise.all([
         getMedicines(),
         getSales(),
         getSuppliers(),
+        getCustomers(),
       ]);
       setStats({
         medicinesCount: meds.length,
         salesCount: sales.length,
         suppliersCount: sups.length,
+        customersCount: customers.length,
       });
       setStatsError(null);
     } catch (err) {
@@ -290,7 +294,7 @@ export default function SettingsView() {
           IndexedDB Object Store Health
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
               Medicines Store
@@ -319,6 +323,11 @@ export default function SettingsView() {
               {stats.suppliersCount}
             </span>
             <span className="text-[11px] text-slate-500 mt-0.5 block">Wholesale partners</span>
+          </div>
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Customers Store</span>
+            <span className="text-2xl font-black text-slate-900 mt-1 block">{stats.customersCount}</span>
+            <span className="text-[11px] text-slate-500 mt-0.5 block">Credit accounts</span>
           </div>
         </div>
 

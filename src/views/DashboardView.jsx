@@ -238,10 +238,10 @@ export default function DashboardView({ onNavigate }) {
           </div>
 
           <button
-            onClick={() => onNavigate('suppliers')}
+            onClick={() => onNavigate('admin')}
             className="mt-4 w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition"
           >
-            Create Purchase Order
+            Manage suppliers in Admin Panel
           </button>
         </div>
       </div>

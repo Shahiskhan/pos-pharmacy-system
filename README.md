@@ -23,14 +23,52 @@ Local-first storage means records belong to the application profile on that devi
 ## ✨ Capabilities
 
 - Barcode-oriented POS search and FEFO (First Expiring, First Out) batch selection
+- Keyboard-wedge USB barcode scanning with fast keystroke capture
 - Cart checkout with percentage or fixed discounts, tax, and tender/change calculations
-- 80mm thermal receipt layout with a generated SVG barcode
+- Silent Electron printing for 80mm thermal receipts and Purchase Orders
+- Strict expired-batch blocking at selection and atomic checkout
 - Inventory and batch management with expiry and low-stock indicators
 - Common-medicine shortcut catalog for manual stock entry
 - Sales history, returns, and local stock restoration
+- Customer credit (Udhaar) accounts, ledger history, and repayment tracking
 - Sales analytics, low-stock Purchase Order generation, and spreadsheet exports
 - Local JSON database backup and factory-reset controls
+- Automatic daily local JSON backups and a backup attempt before application exit
 - White-label store identity customization
+
+## 🔐 Admin Panel Setup
+
+The application now includes a secure admin console for managing users, content, reports, notifications, and site settings from a single panel.
+
+### Admin registration via environment variables
+
+Copy the example environment file and update the values before running the app:
+
+```bash
+copy .env.example .env
+```
+
+Then set the following values in `.env`:
+
+```env
+VITE_ADMIN_USERNAME=admin
+VITE_ADMIN_EMAIL=admin@pharmacy.local
+VITE_ADMIN_PASSWORD=admin123
+VITE_ADMIN_RESET_SECRET=change-this-secret
+```
+
+The first admin account is created from these environment variables. The same admin panel also lets the configured admin reset their password later using the reset secret stored in `.env`.
+
+### Accessing the admin panel
+
+- Open the app and select the new `Admin Panel` item in the sidebar.
+- Login with the environment username and password.
+- Once logged in, you can manage:
+  - User Management
+  - Content Management
+  - Reports & Analytics
+  - Settings
+  - Notifications
 
 ## 🧰 Tech Stack
 
